@@ -1,26 +1,4 @@
 #!/bin/bash
-
-
-OS_VERSION=$1
-RPMS=""
-
-if [[ $OS_VERSION == "" ]];then
-    echo "$0  6|7   [ CentOS Version ]"
-    echo "Example :  $0 7"
-    exit 2
-
-elif [[ $OS_VERSION == "7" ]];then
-    RPMS="CentOS7.x"
-elif [[ $OS_VERSION == "6" ]];then
-    RPMS="CentOS6.x"
-else
-    echo "$0  6|7   [ CentOS Version ]"
-    echo "Example :  $0 7"
-    exit 3
-fi
-
-
-
 RANDOM_STR_HOSTS=$(cat /dev/urandom | head -n 2 | md5sum  | cut -c 1-10)".hosts"
 
 if [[ ! -d ./tmp ]];then
@@ -36,13 +14,12 @@ while read line
 do
     host_name=$(echo ${line} | awk '{print $1}')
     host_ip=$(echo ${line} | awk '{print $2}')
-    echo "${host_ip}    ${host_name}" >> ./tmp/${RANDOM_STR_HOSTS}
+    echo "${host_name}    ${host_ip}" >> ./tmp/${RANDOM_STR_HOSTS}
 done < ./list.txt
 
 
 ##
 ## scp hosts and cat to /etc/hosts
-## scp rpms and install
 ##
 while read line
 do
@@ -63,24 +40,6 @@ EOF
 	expect << EOF
         set timeout 300
 		spawn ssh -p ${ssh_port} ${user}@${host_ip} "cat /tmp/${RANDOM_STR_HOSTS} >> /etc/hosts"
-		expect {
-			"*yes/no" { send "yes\r"; exp_continue }
-			"*password:" { send "$pass\r"}
-		}
-EOF
-
-    expect << EOF
-        set timeout 300
-        spawn scp -r -P ${ssh_port} ./rpm ${user}@${host_ip}:/tmp
-        expect {
-            "*yes/no" { send "yes\r"; exp_continue }
-            "*password:" { send "$pass\r"}
-        }
-EOF
-
-	expect << EOF
-        set timeout 300
-		spawn ssh -p ${ssh_port} ${user}@${host_ip} "cd /tmp/rpm/${RPMS} && rpm -iUvh ./*.rpm --force"
 		expect {
 			"*yes/no" { send "yes\r"; exp_continue }
 			"*password:" { send "$pass\r"}
@@ -127,51 +86,54 @@ do
 
     while read line
     do
-        target_host_name=$(echo ${line} | awk '{print $1}')
+
         target_host_ip=$(echo ${line} | awk '{print $2}')
         target_ssh_port=$(echo ${line} | awk '{print $3}')
         target_user=$(echo ${line} | awk '{print $4}')
         target_pass=$(echo ${line} | awk '{print $5}')
 
         if [[ $target_host_ip  == $host_ip ]];then
-            echo "------------ same host, skip target_host_name = ${target_host_name} -------------"
             continue
-        fi
-
-        prompt='#'
-        if [[ ${user} == 'root' ]];then
-            prompt='#'
-        else
-            prompt='$'
         fi
 
         expect << EOF
             set timeout 300
-            spawn ssh -p ${ssh_port} ${user}@${host_ip}
+            spawn ssh -p ${ssh_port} ${user}@${host_ip} "ssh-copy-id -p ${target_ssh_port} -i ~/.ssh/id_rsa.pub ${target_user}@${target_host_ip}"
             expect {
-                 "*yes/no" { send "yes\r"; exp_continue }
-                 "password:" { send "$pass\r"; exp_continue }
-                 "${prompt}" {
-                    send "ssh-copy-id -p ${target_ssh_port} -i ~/.ssh/id_rsa.pub ${target_user}@${target_host_ip}\n"
-                    expect {
-                        "*yes/no" { send "yes\r"; exp_continue }
-                        "password:" { send "$target_pass\r"; exp_continue }
-                        "${prompt}" { 
-                            send "ssh -p ${target_ssh_port} ${target_user}@${target_host_name}\r"
-                            expect {
-                                "*yes/no" { send "yes\r"; exp_continue }
-                                "password:" { send "$target_pass\r"; exp_continue }
-                                "${prompt}" {send "exit\r"}
-                            }
-                        }
-                    }
-                }
+             "*yes/no" { send "yes\r"; exp_continue }
+             "${user}@${host_ip}'s password:" { send "$pass\r"; exp_continue  }
+             "${target_user}@${target_host_ip}'s password:" { send "$target_pass\r" }
             }
-            sleep 1
-            puts stderr "\n--------- ssh-copy-id from ${host_ip}  to ${target_host_ip} --------\n"
-
 EOF
 
     done < ./list.txt
 done < ./list.txt
 
+
+##
+## Get KNOW_HOSTS by HOSTNAME
+##
+while read line
+do
+    host_name=$(echo ${line} | awk '{print $1}')
+    ssh_port=$(echo ${line} | awk '{print $3}')
+    user=$(echo ${line} | awk '{print $4}')
+    pass=$(echo ${line} | awk '{print $5}')
+    prompt='#'
+    if [[ ${user} == 'root' ]];then
+        prompt='#'
+    else
+        prompt='$'
+    fi
+    expect << EOF
+        set timeout  300
+        spawn -noecho ssh  -p ${port} ${user}@${host_name}
+        expect  {
+           "(yes/no)?" {send "yes\r";exp_continue}
+           "password:" {send "\x03\r"; exp_continue}
+           "${prompt}" {send "exit\r"}
+        }
+        set timeout  300
+        expect "100%"
+EOF
+done < ./list.txt
