@@ -50,7 +50,7 @@ do
     pass=$(echo ${line} | awk '{print $5}')
 
 	expect << EOF
-        spawn ssh -p ssh_port ${user}@${host_ip} "cd ~/.ssh && rm -rf id_rsa*;ssh-keygen -t rsa"
+        spawn ssh -p ${ssh_port} ${user}@${host_ip} "cd ~/.ssh && rm -rf id_rsa*;ssh-keygen -t rsa"
 		expect {
 		 "*yes/no" { send "yes\r"; exp_continue }
 		 "*password:" { send "$pass\r"; exp_continue  }
@@ -87,7 +87,7 @@ do
         fi
 
         expect << EOF
-            spawn ssh -p ssh_port ${user}@${host_ip} "ssh-copy-id -p -i ~/.ssh/id_rsa.pub ${target_user}@${target_host_ip}"
+            spawn ssh -p ${ssh_port} ${user}@${host_ip} "ssh-copy-id -p ${ssh_port} -i ~/.ssh/id_rsa.pub ${target_user}@${target_host_ip}"
             expect {
              "*yes/no" { send "yes\r"; exp_continue }
              "*password:" { send "$pass\r"; exp_continue  }
