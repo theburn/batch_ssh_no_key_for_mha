@@ -20,6 +20,12 @@ else
 fi
 
 
+##
+## rpm install expect and tcl
+##
+
+rpm -iUvh ./rpm/${RPMS}/*.rpm --force
+
 
 RANDOM_STR_HOSTS=$(cat /dev/urandom | head -n 2 | md5sum  | cut -c 1-10)".hosts"
 
