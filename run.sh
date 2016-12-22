@@ -2,12 +2,20 @@
 
 
 OS_VERSION=$1
+INSTALL_RPM=$2
+
+if [[ ${INSTALL_RPM} == "" ]];then
+    INSTALL_RPM=1
+fi
+
 RPMS=""
 
 function usage()
 {
-    echo "$0  6|7|reboot   [ CentOS Version ]"
-    echo "Example :  $0 7"
+    echo "$0  6|7  1 "
+    echo "Example :  $0 7 (means os is centos7.x and install rpms)"
+    echo "           $0 7 0  (means dont't install rpms)" 
+    echo "           $0 reboot  (means dont't install rpms)" 
 }
 
 
@@ -87,7 +95,9 @@ fi
 ## rpm install expect and tcl
 ##
 
-rpm -iUvh ./rpm/${RPMS}/*.rpm --force
+if [[ ${INSTALL_RPM} -eq 1 ]];then
+    rpm -iUvh ./rpm/${RPMS}/*.rpm --force
+fi
 
 CURDIR=$(pwd)
 
@@ -161,57 +171,59 @@ EOF
 EOF
 
 
-        if [[ ${OS_VERSION} -ge 7 ]];then 
-            expect << EOF
-                set timeout 300
-                spawn ssh -p ${ssh_port} ${user}@${host_ip} "echo ${host_name} > /etc/hostname"
-                expect {
-                     "*yes/no" { send "yes\r"; exp_continue }
-                     "*password:" { send "$pass\r";}
-                }
-                expect eof
+    if [[ ${OS_VERSION} -ge 7 ]];then 
+        expect << EOF
+            set timeout 300
+            spawn ssh -p ${ssh_port} ${user}@${host_ip} "echo ${host_name} > /etc/hostname"
+            expect {
+                 "*yes/no" { send "yes\r"; exp_continue }
+                 "*password:" { send "$pass\r";}
+            }
+            expect eof
 EOF
-        else 
-            expect << EOF
-                set timeout 300
-                spawn ssh -p ${ssh_port} ${user}@${host_ip} "sed -i 's/HOSTNAME=.*/HOSTNAME=${host_name}/g' /etc/sysconfig/network;"
-                expect {
-                     "*yes/no" { send "yes\r"; exp_continue }
-                     "*password:" { send "$pass\r";}
-                }
-                expect eof
-EOF
-
-        fi
-
-    expect << EOF
-        set timeout 300
-        spawn sh -c "scp -P ${ssh_port}  -r ${CURDIR}/rpm ${user}@${host_ip}:/tmp/"
-        expect {
-            "*yes/no" { send "yes\r"; exp_continue}
-            "*password:" { send "$pass\r"}
-        }
-
-        expect "100%"
-        expect eof
+    else 
+        expect << EOF
+            set timeout 300
+            spawn ssh -p ${ssh_port} ${user}@${host_ip} "sed -i 's/HOSTNAME=.*/HOSTNAME=${host_name}/g' /etc/sysconfig/network;"
+            expect {
+                 "*yes/no" { send "yes\r"; exp_continue }
+                 "*password:" { send "$pass\r";}
+            }
+            expect eof
 EOF
 
-	expect << EOF
-        set timeout 300
-		spawn ssh -p ${ssh_port} ${user}@${host_ip} 
-		expect {
-			"*yes/no" { send "yes\r"; exp_continue}
-			"*password:" { send "$pass\r"}
-		}
-        expect "${prompt}" { send "rpm -iUvh /tmp/rpm/${RPMS}/\*.rpm --force\r" }
+    fi
 
-        expect { 
-            "*rpm" exp_continue
-            "${prompt}" { send "exit\r" }
-        }
+    if [[ ${INSTALL_RPM} -eq 1 ]];then
+        expect << EOF
+            set timeout 300
+            spawn sh -c "scp -P ${ssh_port}  -r ${CURDIR}/rpm ${user}@${host_ip}:/tmp/"
+            expect {
+                "*yes/no" { send "yes\r"; exp_continue}
+                "*password:" { send "$pass\r"}
+            }
 
-        expect eof
+            expect "100%"
+            expect eof
 EOF
+
+        expect << EOF
+            set timeout 300
+            spawn ssh -p ${ssh_port} ${user}@${host_ip} 
+            expect {
+                "*yes/no" { send "yes\r"; exp_continue}
+                "*password:" { send "$pass\r"}
+            }
+            expect "${prompt}" { send "rpm -iUvh /tmp/rpm/${RPMS}/\*.rpm --force\r" }
+
+            expect { 
+                "*rpm" exp_continue
+                "${prompt}" { send "exit\r" }
+            }
+
+            expect eof
+EOF
+    fi
 
 done < ./list.txt
 
