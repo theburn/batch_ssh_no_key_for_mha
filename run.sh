@@ -26,6 +26,7 @@ fi
 
 rpm -iUvh ./rpm/${RPMS}/*.rpm --force
 
+CURDIR=$(pwd)
 
 RANDOM_STR_HOSTS=$(cat /dev/urandom | head -n 2 | md5sum  | cut -c 1-10)".hosts"
 
@@ -57,41 +58,68 @@ do
     user=$(echo ${line} | awk '{print $4}')
     pass=$(echo ${line} | awk '{print $5}')
 
+    prompt='#'
+    if [[ ${user} == 'root' ]];then
+        prompt='#'
+    else
+        prompt='$'
+    fi
+
 	expect << EOF
         set timeout 300
-		spawn scp -P ${ssh_port} ./tmp/${RANDOM_STR_HOSTS} ${user}@${host_ip}:/tmp
+		spawn scp -P ${ssh_port} ${CURDIR}/tmp/${RANDOM_STR_HOSTS} ${user}@${host_ip}:/tmp/
 		expect {
-			"*yes/no" { send "yes\r"; exp_continue }
-			"*password:" { send "$pass\r"}
+			"*yes/no" { send "yes\r"; exp_continue}
+			"*password:" { send "$pass\r"; exp_continue}
+            "${prompt}"  {send "exit\r"}
+            "*hosts" exp_continue
 		}
+        expect eof
 EOF
 
 	expect << EOF
         set timeout 300
-		spawn ssh -p ${ssh_port} ${user}@${host_ip} "cat /tmp/${RANDOM_STR_HOSTS} >> /etc/hosts"
+		spawn ssh -p ${ssh_port} ${user}@${host_ip}
 		expect {
-			"*yes/no" { send "yes\r"; exp_continue }
+			"*yes/no" { send "yes\r"; exp_continue}
 			"*password:" { send "$pass\r"}
 		}
+
+        expect { 
+            "${prompt}" { send "cat /tmp/${RANDOM_STR_HOSTS} >> /etc/hosts;cat /etc/hosts\r" }
+        }
+        expect "${prompt}" { send "exit\r" }
+
+        expect eof
+
 EOF
 
     expect << EOF
         set timeout 300
-        spawn scp -r -P ${ssh_port} ./rpm ${user}@${host_ip}:/tmp
+        spawn sh -c "scp -P ${ssh_port}  -r ${CURDIR}/rpm ${user}@${host_ip}:/tmp/"
         expect {
-            "*yes/no" { send "yes\r"; exp_continue }
+            "*yes/no" { send "yes\r"; exp_continue}
             "*password:" { send "$pass\r"}
         }
+
+        expect eof
 EOF
 
 	expect << EOF
         set timeout 300
-		spawn ssh -p ${ssh_port} ${user}@${host_ip} "cd /tmp/rpm/${RPMS};rpm -iUvh ./*.rpm --force"
+		spawn ssh -p ${ssh_port} ${user}@${host_ip} 
 		expect {
-			"*yes/no" { send "yes\r"; exp_continue }
+			"*yes/no" { send "yes\r"; exp_continue}
 			"*password:" { send "$pass\r"}
 		}
-        sleep 1
+        expect "${prompt}" { send "rpm -iUvh /tmp/rpm/${RPMS}/\*.rpm --force\r" }
+
+        expect { 
+            "*rpm" exp_continue
+            "${prompt}" { send "exit\r" }
+        }
+
+        expect eof
 EOF
 
 done < ./list.txt
@@ -117,6 +145,8 @@ do
 		 "Enter passphrase (empty for no passphrase):" { send "\n\r"; exp_continue }
 		 "Enter same passphrase again:" { send "\n\n\r" }
 		}
+
+        expect eof
 EOF
 
 done < ./list.txt
@@ -140,10 +170,10 @@ do
         target_user=$(echo ${line} | awk '{print $4}')
         target_pass=$(echo ${line} | awk '{print $5}')
 
-        if [[ $target_host_ip  == $host_ip ]];then
-            echo "------------ same host, skip target_host_name = ${target_host_name} -------------"
-            continue
-        fi
+       # if [[ $target_host_ip  == $host_ip ]];then
+       #     echo "------------ same host, skip target_host_name = ${target_host_name} -------------"
+       #     continue
+       # fi
 
         prompt='#'
         if [[ ${user} == 'root' ]];then
@@ -170,12 +200,18 @@ do
                                 "password:" { send "$target_pass\r"; exp_continue }
                                 "${prompt}" {send "exit\r"}
                             }
+                            expect {
+                                "${prompt}" {send "exit\r"}
+                            }
                         }
                     }
                 }
             }
+            expect eof
+
             sleep 1
             puts stderr "\n--------- ssh-copy-id from ${host_ip}  to ${target_host_ip} --------\n"
+
 
 EOF
 
