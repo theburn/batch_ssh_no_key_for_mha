@@ -80,11 +80,12 @@ EOF
 
 	expect << EOF
         set timeout 300
-		spawn ssh -p ${ssh_port} ${user}@${host_ip} "cd /tmp/rpm/${RPMS} && rpm -iUvh ./*.rpm --force"
+		spawn ssh -p ${ssh_port} ${user}@${host_ip} "cd /tmp/rpm/${RPMS};rpm -iUvh ./*.rpm --force"
 		expect {
 			"*yes/no" { send "yes\r"; exp_continue }
 			"*password:" { send "$pass\r"}
 		}
+        sleep 1
 EOF
 
 done < ./list.txt
