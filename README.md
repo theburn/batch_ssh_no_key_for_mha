@@ -20,4 +20,8 @@ root> sh ./run.sh 6  # means all OS is CentOS 6.x
 root> sh ./run.sh reboot
 ```
 
-> So far, Only supprot CentOS-7.x and  CentOS-6.x and need `root`
+## Notice  
+
+1. so far, Only supprot CentOS-7.x and  CentOS-6.x and need `root`;
+2. if you use centos 6.x , please `yum install openssh-clients` first;
+3. CentOS-6.x `ssh-copy-id` not support `non-22` port

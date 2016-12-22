@@ -3,6 +3,7 @@
 
 OS_VERSION=$1
 INSTALL_RPM=$2
+SSH_COPY_ID="ssh-copy-id -p ${target_ssh_port}"
 
 if [[ ${INSTALL_RPM} == "" ]];then
     INSTALL_RPM=1
@@ -73,16 +74,15 @@ exit 0
 }
 
 
-
-
-
 if [[ $OS_VERSION == "" ]];then
     usage
     exit 2
 elif [[ $OS_VERSION == "7" ]];then
     RPMS="CentOS7.x"
+    SSH_COPY_ID="ssh-copy-id -p ${target_ssh_port}"
 elif [[ $OS_VERSION == "6" ]];then
     RPMS="CentOS6.x"
+    SSH_COPY_ID="ssh-copy-id"
 elif [[ $OS_VERSION == "reboot" ]];then
     do_reboot
 else
@@ -138,6 +138,18 @@ do
     else
         prompt='$'
     fi
+
+    # Close SELinux 
+#    expect << EOF
+#        set timeout 300
+#        spawn ssh -p ${ssh_port} ${user}@${host_ip} "setenforce 0"
+#        expect {
+#             "*yes/no" { send "yes\r"; exp_continue }
+#             "*password:" { send "$pass\r";}
+#        }
+#        expect eof
+#EOF
+#
 
 	expect << EOF
         set timeout 300
@@ -292,7 +304,7 @@ do
                  "*yes/no" { send "yes\r"; exp_continue }
                  "password:" { send "$pass\r"; exp_continue }
                  "${prompt}" {
-                    send "ssh-copy-id -p ${target_ssh_port} -i ~/.ssh/id_rsa.pub ${target_user}@${target_host_ip}\n"
+                    send "${SSH_COPY_ID} -i ~/.ssh/id_rsa.pub ${target_user}@${target_host_ip}\n"
                     expect {
                         "*yes/no" { send "yes\r"; exp_continue }
                         "password:" { send "$target_pass\r"; exp_continue }
