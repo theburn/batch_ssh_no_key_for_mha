@@ -13,5 +13,11 @@ MySQL_3     192.168.1.4   22   root   111111
 
 2. Then execute:
 ```bash
-./run.sh
+root> sh ./run.sh 7  # means all OS is CentOS 7.x
+root> sh ./run.sh 6  # means all OS is CentOS 6.x
+
+# if you want reboot all server
+root> sh ./run.sh reboot
 ```
+
+> So far, Only supprot CentOS-7.x and  CentOS-6.x and need `root`
