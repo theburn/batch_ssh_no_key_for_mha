@@ -4,18 +4,81 @@
 OS_VERSION=$1
 RPMS=""
 
-if [[ $OS_VERSION == "" ]];then
-    echo "$0  6|7   [ CentOS Version ]"
+function usage()
+{
+    echo "$0  6|7|reboot   [ CentOS Version ]"
     echo "Example :  $0 7"
-    exit 2
+}
 
+
+LOCAL_IPS=""
+function get_local_ips()
+{
+    LOCAL_IPS=$(ip addr | grep -E  "\<inet\>" | grep -v "127.0.0.1" | awk -F [/\ ] '{print $6}')
+}
+
+function do_reboot()
+{
+    get_local_ips
+    SELF_IP=""
+    while read line
+    do
+        host_name=$(echo ${line} | awk '{print $1}')
+        host_ip=$(echo ${line} | awk '{print $2}')
+        ssh_port=$(echo ${line} | awk '{print $3}')
+        user=$(echo ${line} | awk '{print $4}')
+        pass=$(echo ${line} | awk '{print $5}')
+
+        if [[ ${SELF_IP} == "" ]];then
+            for i in ${LOCAL_IPS}
+            do
+                if [[ "${host_ip}" == ${i} ]];then
+                    SELF_IP=${i}
+                fi
+            done
+        fi
+
+        if [[ ${SELF_IP} == ${host_ip} ]];then
+            continue
+        fi
+
+        expect << EOF
+            set timeout 300
+            spawn ssh -p ${ssh_port} ${user}@${host_ip} "reboot"
+            expect {
+                 "*yes/no" { send "yes\r"; exp_continue }
+                 "*password:" { send "$pass\r";}
+                 "closed" { send "\n\r";}
+            }
+            expect eof
+EOF
+
+    echo "--------------- host_ip = ${host_ip} rebooting... ---------------"
+    done < ./list.txt
+    
+    read  -p "Do you want to reboot local host (y/n)?" r
+    if [[ ${r} =~ ^"y" || ${r} =~ ^"Y" ]];then
+        echo "--------------- host_ip = ${SELF_IP} rebooting... ---------------"
+        reboot
+    fi
+exit 0
+}
+
+
+
+
+
+if [[ $OS_VERSION == "" ]];then
+    usage
+    exit 2
 elif [[ $OS_VERSION == "7" ]];then
     RPMS="CentOS7.x"
 elif [[ $OS_VERSION == "6" ]];then
     RPMS="CentOS6.x"
+elif [[ $OS_VERSION == "reboot" ]];then
+    do_reboot
 else
-    echo "$0  6|7   [ CentOS Version ]"
-    echo "Example :  $0 7"
+    usage
     exit 3
 fi
 
@@ -53,6 +116,7 @@ done < ./list.txt
 ##
 while read line
 do
+    host_name=$(echo ${line} | awk '{print $1}')
     host_ip=$(echo ${line} | awk '{print $2}')
     ssh_port=$(echo ${line} | awk '{print $3}')
     user=$(echo ${line} | awk '{print $4}')
@@ -74,6 +138,7 @@ do
             "${prompt}"  {send "exit\r"}
             "*hosts" exp_continue
 		}
+        expect "100%"
         expect eof
 EOF
 
@@ -88,11 +153,36 @@ EOF
         expect { 
             "${prompt}" { send "cat /tmp/${RANDOM_STR_HOSTS} >> /etc/hosts;cat /etc/hosts\r" }
         }
+
         expect "${prompt}" { send "exit\r" }
 
         expect eof
 
 EOF
+
+
+        if [[ ${OS_VERSION} -ge 7 ]];then 
+            expect << EOF
+                set timeout 300
+                spawn ssh -p ${ssh_port} ${user}@${host_ip} "echo ${host_name} > /etc/hostname"
+                expect {
+                     "*yes/no" { send "yes\r"; exp_continue }
+                     "*password:" { send "$pass\r";}
+                }
+                expect eof
+EOF
+        else 
+            expect << EOF
+                set timeout 300
+                spawn ssh -p ${ssh_port} ${user}@${host_ip} "sed -i 's/HOSTNAME=.*/HOSTNAME=${host_name}/g' /etc/sysconfig/network;"
+                expect {
+                     "*yes/no" { send "yes\r"; exp_continue }
+                     "*password:" { send "$pass\r";}
+                }
+                expect eof
+EOF
+
+        fi
 
     expect << EOF
         set timeout 300
@@ -102,6 +192,7 @@ EOF
             "*password:" { send "$pass\r"}
         }
 
+        expect "100%"
         expect eof
 EOF
 
@@ -218,3 +309,6 @@ EOF
     done < ./list.txt
 done < ./list.txt
 
+echo "#######################################################################################"
+echo -e "#Notice : If you want to display the \033[33mhost name\e[0m in PS1[root@{hostname}], Please \e[5m\033[31mreboot\e[0m \e[25m#"
+echo "#######################################################################################"
