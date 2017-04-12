@@ -3,7 +3,6 @@
 
 OS_VERSION=$1
 INSTALL_RPM=$2
-SSH_COPY_ID="ssh-copy-id -p ${target_ssh_port}"
 
 if [[ ${INSTALL_RPM} == "" ]];then
     INSTALL_RPM=1
@@ -79,7 +78,7 @@ if [[ $OS_VERSION == "" ]];then
     exit 2
 elif [[ $OS_VERSION == "7" ]];then
     RPMS="CentOS7.x"
-    SSH_COPY_ID="ssh-copy-id -p ${target_ssh_port}"
+    SSH_COPY_ID="ssh-copy-id -p "
 elif [[ $OS_VERSION == "6" ]];then
     RPMS="CentOS6.x"
     SSH_COPY_ID="ssh-copy-id"
@@ -296,6 +295,17 @@ do
         else
             prompt='$'
         fi
+
+	if [[ $OS_VERSION == "7" ]];then
+	    SSH_COPY_ID="ssh-copy-id -p ${target_ssh_port}"
+	elif [[ $OS_VERSION == "6" ]];then
+	    SSH_COPY_ID="ssh-copy-id"
+	else
+	    usage
+	    exit 3
+	fi
+
+
 
         expect << EOF
             set timeout 300
